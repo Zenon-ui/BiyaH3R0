@@ -9,7 +9,7 @@
    list — that's what triggers old caches to be cleaned up.
     */
 
-const SW_VERSION   = "v7";
+const SW_VERSION   = "v8";
 const SHELL_CACHE  = `biyahero-shell-${SW_VERSION}`;
 // NOT derived from SW_VERSION, on purpose. BiyaHERO.js's bulk "Download
 // Offline Map" flow writes tiles into a cache it opens itself
@@ -73,18 +73,33 @@ self.addEventListener("install", (event) => {
       // (e.g. Google Fonts on a slow connection) can't fail the whole
       // install and leave the app with nothing cached at all.
       Promise.all(
-        SHELL_ASSETS.map((url) =>
-          fetch(url, { mode: "cors", cache: "reload" })
-            .then((resp) => resp.ok && cache.put(url, resp))
-            .catch(() => {
-              /* best-effort; app still works without this one asset cached */
-            })
-        )
+        SHELL_ASSETS.map(async (url) => {
+          try {
+            const resp = await fetch(url, { mode: "cors", cache: "reload" });
+            // Skip anything cache.put will reject: non-2xx, redirects
+            // (GitHub Pages / CDN rewrites), and 206 partial responses.
+            if (!resp.ok || resp.redirected || resp.status === 206) {
+              console.warn(
+                "[BiyaHERO SW] Skipping shell asset:",
+                url,
+                "status=" + resp.status,
+                resp.redirected ? "(redirected)" : ""
+              );
+              return;
+            }
+            await cache.put(url, resp);
+          } catch (err) {
+            console.warn(
+              "[BiyaHERO SW] Failed to cache shell asset:",
+              url,
+              err.message
+            );
+          }
+        })
       )
     )
   );
 });
-
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -159,10 +174,20 @@ self.addEventListener("fetch", (event) => {
         // intermediate HTTP cache layer could keep handing back the same
         // stale response this code is trying to replace, so a deployed
         // fix would never actually reach SHELL_CACHE.
-        const network = fetch(req, { cache: "reload" })
-          .then((resp) => {
-            if (resp && resp.ok) {
-              caches.open(SHELL_CACHE).then((cache) => cache.put(req, resp.clone()));
+           const network = fetch(req, { cache: "reload" })
+          .then(async (resp) => {
+            // Same guard as install: only cache what put() will accept.
+            if (resp && resp.ok && !resp.redirected && resp.status !== 206) {
+              try {
+                const cache = await caches.open(SHELL_CACHE);
+                await cache.put(req, resp.clone());
+              } catch (err) {
+                console.warn(
+                  "[BiyaHERO SW] Shell cache put failed:",
+                  req.url,
+                  err.message
+                );
+              }
             }
             return resp;
           })
