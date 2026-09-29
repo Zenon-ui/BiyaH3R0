@@ -107,18 +107,28 @@ self.addEventListener("fetch", (event) => {
   // ---- Map tiles: cache-first, then network, then cache the result ----
   if (isTileRequest(url)) {
     event.respondWith(
-      caches.open(TILE_CACHE).then(async (cache) => {
+      (async () => {
+        const cache = await caches.open(TILE_CACHE);
         const cached = await cache.match(req);
         if (cached) return cached;
+
         try {
           const resp = await fetch(req);
           // Standard OSM tiles don't send CORS headers, so cross-origin
           // <img> tile requests come back "opaque" (status/body hidden
           // from JS) — that's normal, and opaque responses are cacheable.
           if (resp && (resp.ok || resp.type === "opaque")) {
-            cache.put(req, resp.clone());
-            sessionTilesCached++;
-            broadcastTileCount();
+            // Clone BEFORE anything can consume the body, and await the
+            // put so a failed write is caught here instead of surfacing
+            // as an uncaught "Response body is already used" rejection.
+            const toCache = resp.clone();
+            try {
+              await cache.put(req, toCache);
+              sessionTilesCached++;
+              broadcastTileCount();
+            } catch (putErr) {
+              console.warn("[BiyaHERO SW] Tile cache put failed:", putErr);
+            }
           }
           return resp;
         } catch (err) {
@@ -126,7 +136,7 @@ self.addEventListener("fetch", (event) => {
           // nothing we can serve. Leaflet will just show a blank tile.
           return Response.error();
         }
-      })
+      })()
     );
     return;
   }
