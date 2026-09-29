@@ -81,7 +81,19 @@
         { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }
       ]
     }
-  ],
+  ], "share_target": {
+    "action": "./index.html",
+    "method": "GET",
+    "params": {
+      "title": "share-title",
+      "text": "share-text",
+      "url": "share-url"
+    }
+  },
+  "edge_side_panel": {
+    "preferred_width": 420
+  }
+}
 
   "edge_side_panel": {
     "preferred_width": 420
