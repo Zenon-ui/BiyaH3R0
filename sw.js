@@ -9,7 +9,7 @@
    list — that's what triggers old caches to be cleaned up.
     */
 
-const SW_VERSION   = "v6";
+const SW_VERSION   = "v7";
 const SHELL_CACHE  = `biyahero-shell-${SW_VERSION}`;
 // NOT derived from SW_VERSION, on purpose. BiyaHERO.js's bulk "Download
 // Offline Map" flow writes tiles into a cache it opens itself
